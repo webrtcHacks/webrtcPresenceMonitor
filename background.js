@@ -4,6 +4,9 @@ let totalStreams = 0;
 let ledStatus = "off";
 let settings = JSON.parse(localStorage.getItem("settings"));
 
+//ToDo: Need to handle when there are no settings
+console.log("Settings:", settings);
+
 // prototype for our presence status object
 function Presence(url, streamCount, tabId, tabStatus) {
     this.url = url;
@@ -20,28 +23,46 @@ function webhook(state){
     xhr.send();
     */
 
-    // console.log(settings);
     let url = state==="on" ? settings.onUrl : settings.offUrl;
+    let method = state==="on" ? settings.onMethod : settings.offMethod;
+    let postBody = state==="on" ? settings.onPostBody : settings.offPostBody;
+    let headers = state==="on" ? settings.onHeaders : settings.offHeaders;
+
+
     if (url===""){
         console.log("No "+ state + " url set");
         return
     }
 
-    let fetchParams = {
-        method: settings.method || 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    };
-    if (fetchParams.method === "POST" && settings.postBody !== "")
-        fetchParams.body = JSON.stringify(settings.postBody);
+    let fetchParams = {};
+
+    if (method === 'POST'){
+        fetchParams = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
+
+        if (postBody !== "")
+            fetchParams.body = JSON.stringify(JSON.parse(postBody));    // ToDo: not sure why I need the parse all of the sudden
+    }
+
+    console.log(headers);
+
+    if (headers !== "")
+        fetchParams.headers = Object.assign(fetchParams.headers, JSON.parse(headers));
+
+
+    console.log(url, fetchParams);
 
     fetch(url, fetchParams)
-        // In case we care about the response someday
+    // In case we care about the response someday
         .then(
-            response =>
-                console.log("webhook sent. Response code: " + response.status)
-            )
+            response => {
+                console.log("webhook sent. Response code: " + response.status);
+                response.text().then(text => console.log("response text: " + text))
+            })
         .catch(function (error) {
             console.log('Request failed', error);
         });
@@ -80,6 +101,14 @@ function statusControl(port) {
     else if (totalStreams > 0 && ledStatus === 'off') {
         ledChange("on");
         ledStatus = "on";
+
+        // Maybe switch this to start one timer per tab with gUM
+        // start the timer if there isn't already one running
+        if  (typeof closedTabTimer === 'undefined'){
+            closedTabTimer = setInterval(closedTabChecker, 2000, port);
+            console.log("closedTabChecker " + closedTabTimer + " for " + port.sender.tab.id + " started ");
+        }
+
     }
     // For debugging
     else if (totalStreams === 0 && ledStatus === 'off') {
@@ -94,40 +123,48 @@ function statusControl(port) {
 
     // Update the pop-up text
     port.postMessage({
-              type: 'update',
-              data: presences
-          });
+        type: 'update',
+        data: {status: ledStatus, presences: presences},
+    });
 
 }
 
+// ToDo: check this - it didn't catch a manual tab termination
+//  This was eating too much CPU inside onConnect. Look into starting/stopping only when media is active
+// Check periodically to see if any tabs have been closed, needed if onunload missed
+let closedTabTimer = undefined; //This needs to be global?
+function closedTabChecker(port) {
+
+    // clear the timer if there are no active streams
+    // ToDo: change this if I allow manual setting of ledStatus
+    if (totalStreams === 0) {
+        closedTabTimer = clearInterval(closedTabTimer);
+        console.log("closedTabChecker for tab:" + port.sender.tab.id + " cleared");
+        return;
+    }
+
+    let change = false; // to minimize calls statusControl
+
+    presences.forEach((p) => {
+        if (p.tabStatus === "open") {   //Only check open tabs
+
+            // Check Chrome to see if the tab is still open
+            chrome.tabs.get(p.tabId, () => {
+                if (chrome.runtime.lastError) {
+                    console.log("tab " + p.tabId + " is no longer open");
+                    p.streamCount = 0;
+                    p.tabStatus = "closed";
+                    change = true;
+                }
+            });
+        }
+    });
+
+    if (change)
+        statusControl(port);
+}
+
 chrome.runtime.onConnect.addListener(function (port) {
-
-    // Check periodically to see if any tabs have been closed, needed if onunload missed
-    setInterval(() => {
-
-        if (presences.length === 0)
-            return;
-
-        presences.forEach((p) => {
-            let change = false; // to minimize calls statusControl
-            if (p.tabStatus === "open") {   //Only check open tabs
-
-                // Check Chrome to see if the tab is still open
-                chrome.tabs.get(p.tabId, () => {
-                    if (chrome.runtime.lastError){
-                        console.log("tab " + p.tabId + " is no longer open");
-                        p.streamCount = 0;
-                        p.tabStatus = "closed";
-                        change = true;
-                    }
-                });
-            }
-
-            if (change)
-                statusControl(port);
-        });
-    }, 1000);
-
 
     // Check for messages from inject.js
     port.onMessage.addListener(function (message) {
@@ -185,9 +222,18 @@ chrome.runtime.onConnect.addListener(function (port) {
             console.log("popup request", message);
             port.postMessage({
                 type: 'update',
-                data: presences
+                data: {status: ledStatus, presences: presences},
             });
         }
+
+        // Look for message from the popup & respond with the latest data
+        if (message.type === "command") {
+            console.log("popup command", message);
+            if(message.command){
+                    ledChange(message.command);
+            }
+        }
+        
 
         // Update settings data
         if (message.type === "settings") {
@@ -201,8 +247,10 @@ chrome.runtime.onConnect.addListener(function (port) {
             */
             if(message.data){
                 settings = message.data;
-                if (message.data.postBody)
-                    settings.postBody = JSON.parse(message.data.postBody) || null;
+                if (message.data.onPostBody)
+                    settings.onPostBody = JSON.parse(message.data.onPostBody) || null;
+                if (message.data.offPostBody)
+                    settings.offPostBody = JSON.parse(message.data.offPostBody) || null;
             }
 
             console.log("webhook settings:", settings);
@@ -214,16 +262,17 @@ chrome.runtime.onConnect.addListener(function (port) {
 
 // ToDo: get setting here on load
 
-// This never fires
-chrome.tabs.onRemoved.addListener(function (tabid, removed) {
+// ToDo: investigate this - sometimes Chrome freezes on tab close, some replacement needed to check on active streams
+// This seems to case problems
+//chrome.tabs.onRemoved.addListener(function (tabid, removed) {
 /*    let i = tabIds.indexOf(tabid);
     if (i === -1)
         return;
 
     streamCounts[i] = 0;*/
 
-    console.log("tab " + tabid + " closed.");
-});
+//    console.log("tab " + tabid + " closed.");
+//});
 
 chrome.runtime.onSuspend.addListener(function (message) {
     console.log("Extension port disconnected " + message);

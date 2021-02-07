@@ -29,6 +29,8 @@
 <body>
 <div class="container-fluid main">
     <div class="row">
+        <button type="button" class="btn btn-danger busy hidden" id="busyBtn">Busy</button>
+        <button type="button" class="btn btn-primary busy" id="notBusyBtn">Not busy</button>
         <span style="float: right"><a href="#" id="settingsToggle">⚙️</a></span>
         <div id="settings" style="display:none" class="well">
             <h4>Webhook settings</h4>
@@ -48,6 +50,8 @@
                             <label>Call a URL for status change to on</label><br>
                             <label for="onUrl">On URL</label>
                             <textarea id="onUrl" name="onUrl" type="text" wrap="soft"></textarea><br>
+                            <label for="onHeaders">Headers</label>
+                            <textarea id="onHeaders" name="onHeaders" type="text" wrap="soft"></textarea><br>
                             <input id="onGetSwitch" type="checkbox" class="getSwitch">
                             <label for="onGetSwitch">Use a GET</label><br>
                             <label for="onPostBody" class="onPostBody">POST Body</label>
@@ -64,6 +68,8 @@
                             <label>Call a URL for status change to off</label><br>
                             <label for="offUrl">Off URL</label>
                             <textarea id="offUrl" type="text" name="offUrl" wrap="soft"></textarea><br>
+                            <label for="offHeaders">Headers</label>
+                            <textarea id="offHeaders" name="offHeaders" type="text" wrap="soft"></textarea><br>
                             <input id="offGetSwitch" type="checkbox" class="getSwitch">
                             <label for="offGetSwitch">Use a GET</label><br>
                             <label for="offPostBody" class="offPostBody">POST Body</label>

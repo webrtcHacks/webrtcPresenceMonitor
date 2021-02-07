@@ -1,6 +1,9 @@
 // Inspired by webrtcNotify & adapter.js by Philipp Hancke
 
+
 const inject = '(' + function () {
+
+        const STREAM_CHECK_INTERVAL = 1000; // time between checking for track status changes
 
         let streams = []; //ToDo: store streams here and check them to see if they are active?
         window.streams = streams;
@@ -17,7 +20,7 @@ const inject = '(' + function () {
                     window.postMessage(['webrtcPresence', window.location.href, 'no tracks', stream.id], '*');
                 }
             })
-        }, 200);
+        }, STREAM_CHECK_INTERVAL);
 
         // ToDo: also do navigator.getUserMedia for anyone that still uses that??
         if (navigator.mediaDevices.getUserMedia) {
@@ -60,24 +63,38 @@ const inject = '(' + function () {
 
         window.addEventListener('beforeunload', () => {
             console.log('webrtcPresence: Before unload handler');
+            window.removeEventListener('message', {passive:true});
+
             if(streams.length > 0)
                 window.postMessage(['webrtcPresence', window.location.href, 'beforeunload'], '*');
 
-        }, false)
+
+
+        }, {passive: true})
     } +
     ')();';
+
+let channel = chrome.runtime.connect();
+
+
+// ToDo: debugging: "Uncaught Error: Extension context invalidated."
+// Reinsert inject.js on disconnect?
+channel.onDisconnect.addListener(function() {
+    // clean up when content script gets disconnected
+    console.log("chrome runtime disconnected");
+    window.removeEventListener('message', {passive:true});
+});
+
+
+window.addEventListener('message', function (event) {
+    // if (typeof(event.data) === 'string') return;
+    //if (channel == undefined || event.data[0] !== 'webrtcPresence') return;
+    //else
+    if(channel && event.data[0] === 'webrtcPresence')
+        channel.postMessage(event.data);
+});
 
 let script = document.createElement('script');
 script.textContent = inject;
 (document.head || document.documentElement).appendChild(script);
 script.parentNode.removeChild(script);
-
-let channel = chrome.runtime.connect();
-
-
-window.addEventListener('message', function (event) {
-    // if (typeof(event.data) === 'string') return;
-    if (!channel || event.data[0] !== 'webrtcPresence') return;
-    else
-        channel.postMessage(event.data)
-});
