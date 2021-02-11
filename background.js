@@ -1,11 +1,18 @@
 // global vars
 let presences = [];
 let totalStreams = 0;
-let ledStatus = "off";
+let ledStatus;
 let settings = JSON.parse(localStorage.getItem("settings"));
 
 //ToDo: Need to handle when there are no settings
 console.log("Settings:", settings);
+if(settings.busy)
+    ledStatus = settings.busy;
+else{
+    settings.busy = false;
+    ledStatus = "off";
+
+}
 
 // prototype for our presence status object
 function Presence(url, streamCount, tabId, tabStatus) {
@@ -44,8 +51,12 @@ function webhook(state){
             }
         };
 
-        if (postBody !== "")
-            fetchParams.body = JSON.stringify(JSON.parse(postBody));    // ToDo: not sure why I need the parse all of the sudden
+        if (postBody !== ""){
+            // fetchParams.body = postBody;
+            // ToDo: debug
+            // window.fetchParams = fetchParams;
+            fetchParams.body = JSON.stringify(postBody);    // ToDo: not sure why I need the parse all of the sudden
+        }
     }
 
     console.log(headers);
@@ -54,17 +65,17 @@ function webhook(state){
         fetchParams.headers = Object.assign(fetchParams.headers, JSON.parse(headers));
 
 
-    console.log(url, fetchParams);
+    //console.log(url, fetchParams);
 
     fetch(url, fetchParams)
     // In case we care about the response someday
         .then(
             response => {
-                console.log("webhook sent. Response code: " + response.status);
+                console.log("fetch details:", url, fetchParams, response);
                 response.text().then(text => console.log("response text: " + text))
             })
         .catch(function (error) {
-            console.log('Request failed', error);
+            console.log("fetch request failed details:", url, fetchParams, error);
         });
 }
 
@@ -76,12 +87,18 @@ function ledChange(state) {
     chrome.tabs.query({active: true, windowType: "normal", currentWindow: true}, function (d) {
         let tabId = d[0].id;
         chrome.browserAction.setIcon({path: "icons/" + state + '.png'});    //Add tabId: tabId to make it tab specific
-
     });
+
+    // ToDo: make HID work
+    //HID
+    if(settings.hid){
+        glow([180,0,0]).catch(err=>console.error(err));
+    }
 }
 
 
 function statusControl(port) {
+
 
     totalStreams = presences.reduce((total, p) => total + p.streamCount, 0);
     let liveTabs = presences.reduce((total, p) => total + p.live(), 0);
@@ -89,11 +106,21 @@ function statusControl(port) {
     console.log("total stream count is: " + totalStreams);
     console.log("active tab count is: " + liveTabs);
 
+
+    // ToDo: need to manage manual status changes from on/off button
+
+    /*
+    * When to turn ON the light:
+    * Manual - err on side of being on too often
+    * TURN ON: if WebRTC active and LED is off
+    * TURN OFF: if WebRTC not active, not manual busy, and the LED is off
+    * */
+
     // Update the badge text
     chrome.browserAction.setBadgeText({text: liveTabs.toString()});
 
     // Turn the LED off
-    if (totalStreams === 0 && ledStatus === 'on') {
+    if (totalStreams === 0 && ledStatus === 'on' && !settings.busy) {
         ledChange("off");
         ledStatus = "off";
     }
@@ -110,7 +137,8 @@ function statusControl(port) {
         }
 
     }
-    // For debugging
+    /*
+    // ToDo: remove this if the above works; For debugging
     else if (totalStreams === 0 && ledStatus === 'off') {
         console.log("No WebRTC streams")
     } else if (totalStreams > 0 && ledStatus === 'on') {
@@ -120,6 +148,7 @@ function statusControl(port) {
     else {
         console.error("unhandled condition: ", totalStreams, ledStatus)
     }
+    */
 
     // Update the pop-up text
     port.postMessage({
@@ -230,11 +259,17 @@ chrome.runtime.onConnect.addListener(function (port) {
         if (message.type === "command") {
             console.log("popup command", message);
             if(message.command){
+                    // ToDo: ***manage manual status
+                    console.log("DEBUG:", message.command);
+                    settings.busy = message.command === "on";
                     ledChange(message.command);
+                    ledStatus = "on";
+
             }
         }
-        
 
+
+        // ToDo: I don't remember if this is required to load settings background.js or it is already shared from popup.js
         // Update settings data
         if (message.type === "settings") {
             console.log("popup settings", message);

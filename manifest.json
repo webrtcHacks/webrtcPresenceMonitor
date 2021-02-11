@@ -7,7 +7,7 @@
       "run_at": "document_start"
    } ],
   "background": {
-    "scripts": ["background.js"],
+    "scripts": ["background.js", "include/embrava.js"],
     "persistent": true
   },
   "browser_action": {

@@ -7,6 +7,8 @@ $(document).ready( function () {
 
     let busyBtn =  $("#busyBtn");
     let notBusyBtn =  $("#notBusyBtn");
+    let hid = false;
+    let busy = false;
 
     let port = chrome.extension.connect({
         name: "WebRTC Presence popup"
@@ -19,11 +21,13 @@ $(document).ready( function () {
 
             if(msg.data.status) {
                 if (msg.data.status === "on") {
+                    busy = true;
                     console.log("turn busy button on");
                     busyBtn.removeClass("hidden");
                     notBusyBtn.addClass("hidden");
                 } else if (msg.data.status === "off") {
                     //busyBtn.addClass("hidden");
+                    busy = false;
                     busyBtn.addClass("hidden");
                     notBusyBtn.removeClass("hidden");
                 }
@@ -55,14 +59,18 @@ $(document).ready( function () {
         if(e.target.innerText==="Busy"){
             console.log("on button clicked; turning off");
             port.postMessage({type: "command", command:"off"});
+            busy = false;
         }
         else if(e.target.innerText==="Not busy"){
             console.log("off button clicked; turning on");
             port.postMessage({type: "command", command:"on"});
+            busy = true;
         }
         else{
             console.log("on/off button handler error", e);
         }
+
+        sendSettings();
 
     });
 
@@ -75,6 +83,9 @@ $(document).ready( function () {
         settings.onMethod = $("#onGetSwitch")[0].checked ? "GET" : "POST";
         settings.offMethod = $("#offGetSwitch")[0].checked ? "GET" : "POST";
 
+        settings.hid = hid;
+        settings.busy = busy;
+
         console.log(settings);
 
         port.postMessage({type: "settings", data: settings});
@@ -85,24 +96,39 @@ $(document).ready( function () {
 
 
     // Get settings data from a localStorage and populate the forms
-    let formData = JSON.parse(localStorage.getItem("settings"));
-    console.log("saved settings:", formData);
+    let settingsData = JSON.parse(localStorage.getItem("settings"));
+    console.log("saved settings:", settingsData);
 
-    // Update the forms if we have saved settings
-    if(formData){
+    // Update the UI if we have saved settings
+    if(settingsData){
 
-        onForm["onUrl"].value = formData["onUrl"] || "";
-        onForm["onHeaders"].value = formData["onHeaders"] || "";
-        onForm["onPostBody"].value = formData["onPostBody"] || "";
-        onForm["onGetSwitch"].checked = formData["onMethod"] === "GET";
+        hid = settingsData.hid;
+        busy = settingsData.busy;
+
+        $("#embrava").prop("checked", settingsData.hid);
+
+        if(settingsData.busy){
+            busyBtn.removeClass("hidden");
+            notBusyBtn.addClass("hidden");
+        }
+        else{
+            busyBtn.addClass("hidden");
+            notBusyBtn.removeClass("hidden");
+        }
+
+
+        onForm["onUrl"].value = settingsData["onUrl"] || "";
+        onForm["onHeaders"].value = settingsData["onHeaders"] || "";
+        onForm["onPostBody"].value = settingsData["onPostBody"] || "";
+        onForm["onGetSwitch"].checked = settingsData["onMethod"] === "GET";
         if(onForm["onGetSwitch"].checked)
             $(".onPostBody").hide();
 
 
-        offForm["offUrl"].value = formData["offUrl"] || "";
-        offForm["offHeaders"].value = formData["offHeaders"] || "";
-        offForm["offGetSwitch"].checked = formData["offMethod"] === "GET";
-        offForm["offPostBody"].value = formData["offPostBody"] || "";
+        offForm["offUrl"].value = settingsData["offUrl"] || "";
+        offForm["offHeaders"].value = settingsData["offHeaders"] || "";
+        offForm["offGetSwitch"].checked = settingsData["offMethod"] === "GET";
+        offForm["offPostBody"].value = settingsData["offPostBody"] || "";
         if(offForm["offGetSwitch"].checked)
             $(".offPostBody").hide();
 
@@ -117,6 +143,10 @@ $(document).ready( function () {
     });
     $("#offGetSwitch").change(()=>{
         $(".offPostBody").toggle();
+    });
+
+    $("#embrava").change(()=>{
+        hid = !hid;
     });
 
     $("#saveButton").click(()=>{
