@@ -2,8 +2,9 @@
    "content_scripts": [ {
       "js": [ "inject.js" ],
       "matches": [ "http://*/*", "https://*/*" ],
-      "all_frames": true,
-      "match_about_blank": true,
+      "exclude_matches": ["*://tweetdeck.com/*, *://twitter.com/*"],
+      "all_frames": false,
+      "match_about_blank": false,
       "run_at": "document_start"
    } ],
   "background": {

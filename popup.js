@@ -145,13 +145,31 @@ $(document).ready( function () {
         $(".offPostBody").toggle();
     });
 
-    $("#embrava").change(()=>{
-        hid = !hid;
-    });
-
     $("#saveButton").click(()=>{
         sendSettings();
         localStorage.setItem("settings", JSON.stringify(settings));
     });
 
+    // let hidEnabled = true;
+    $("#embrava").change(async ()=>{
+        hid = !hid;
+        // ToDo: testing
+        const device_list = await navigator.hid.getDevices();
+        console.log(device_list);
+        if(device_list.length!==0){
+            glow(hid ? [255,255,0] : [0,255,255]);
+        }
+        else{
+            console.log("no HID devices")
+        }
+
+
+    });
+
+    $("#popout").click(()=>{
+        window.open("popout.html", "Popout", "width=200,height=100");
+    });
+
+
 });
+
